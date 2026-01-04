@@ -1,5 +1,5 @@
--- Premium Auto TP GUI Script v4 - FINAL
--- God Mode sempre ativo + Bypass máximo + Marcador quadrado correto
+-- Premium Auto TP GUI Script v4 - DELTA COMPATIBLE
+-- God Mode otimizado para Delta + Bypass máximo
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -18,7 +18,7 @@ local isHoldingButton = false
 local isTeleporting = false
 local statusText = "Aguardando..."
 
--- ===== GOD MODE ULTRA BYPASS (INVISÍVEL) =====
+-- ===== GOD MODE DELTA COMPATIBLE =====
 local godModeConnections = {}
 local godModeActive = false
 
@@ -31,113 +31,87 @@ local function setupGodMode()
     if not humanoid or not hrp then return end
     
     godModeActive = true
-    print("🛡️ God Mode ULTRA BYPASS ATIVO")
+    print("🛡️ God Mode DELTA BYPASS ATIVO")
     
-    -- BYPASS 1: Força MaxHealth muito alto (anti-oneshot)
-    humanoid.MaxHealth = math.huge
-    humanoid.Health = math.huge
+    -- BYPASS 1: MaxHealth alto
+    humanoid.MaxHealth = 9e9
+    humanoid.Health = 9e9
     
-    -- BYPASS 2: Remove todos os danos via Heartbeat
+    -- BYPASS 2: Heartbeat principal (mais compatível com Delta)
     table.insert(godModeConnections, RunService.Heartbeat:Connect(function()
         if not godModeActive then return end
         pcall(function()
-            if humanoid and humanoid.Parent then
-                humanoid.Health = math.huge
-                humanoid.MaxHealth = math.huge
+            if humanoid and humanoid.Parent and humanoid.Health > 0 then
+                humanoid.Health = 9e9
+                humanoid.MaxHealth = 9e9
                 
                 -- Anti-fall damage
                 if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
-                    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
+                    local velocity = hrp.AssemblyLinearVelocity
+                    hrp.AssemblyLinearVelocity = Vector3.new(velocity.X, math.max(velocity.Y, -50), velocity.Z)
                 end
             end
         end)
     end))
     
-    -- BYPASS 3: RenderStepped (mais rápido que Heartbeat)
-    table.insert(godModeConnections, RunService.RenderStepped:Connect(function()
-        if not godModeActive then return end
-        pcall(function()
-            if humanoid and humanoid.Parent then
-                humanoid.Health = math.huge
-            end
-        end)
-    end))
-    
-    -- BYPASS 4: Stepped (física)
-    table.insert(godModeConnections, RunService.Stepped:Connect(function()
-        if not godModeActive then return end
-        pcall(function()
-            if humanoid and humanoid.Parent then
-                humanoid.Health = math.huge
-                
-                -- Previne ragdoll
-                for _, part in pairs(character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = part.Name == "HumanoidRootPart" or part.Name == "Head"
-                    end
-                end
-            end
-        end)
-    end))
-    
-    -- BYPASS 5: StateChanged (anti-morte/ragdoll)
+    -- BYPASS 3: StateChanged (anti-morte/ragdoll) - SEM Dying event
     table.insert(godModeConnections, humanoid.StateChanged:Connect(function(oldState, newState)
         if not godModeActive then return end
-        if newState == Enum.HumanoidStateType.Dead or 
-           newState == Enum.HumanoidStateType.FallingDown or
-           newState == Enum.HumanoidStateType.Ragdoll or
-           newState == Enum.HumanoidStateType.Physics then
+        if newState == Enum.HumanoidStateType.Dead then
             task.spawn(function()
-                task.wait()
-                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-                humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                humanoid.Health = math.huge
+                task.wait(0.1)
+                if humanoid and humanoid.Parent then
+                    humanoid.Health = 9e9
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end)
+        elseif newState == Enum.HumanoidStateType.FallingDown or
+               newState == Enum.HumanoidStateType.Ragdoll or
+               newState == Enum.HumanoidStateType.Physics then
+            task.spawn(function()
+                if humanoid and humanoid.Parent then
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                    humanoid.Health = 9e9
+                end
             end)
         end
     end))
     
-    -- BYPASS 6: HealthChanged (instantâneo)
+    -- BYPASS 4: HealthChanged (protege contra dano)
     table.insert(godModeConnections, humanoid.HealthChanged:Connect(function(health)
         if not godModeActive then return end
-        if health < math.huge then
-            humanoid.Health = math.huge
+        if health < humanoid.MaxHealth * 0.99 then
+            humanoid.Health = 9e9
         end
     end))
     
-    -- BYPASS 7: Dying event (última linha de defesa)
-    table.insert(godModeConnections, humanoid.Dying:Connect(function()
-        if not godModeActive then return end
-        task.spawn(function()
-            humanoid.Health = math.huge
-            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end)
-    end))
+    -- BYPASS 5: ForceField invisível
+    local function ensureForceField()
+        if not character:FindFirstChildOfClass("ForceField") then
+            local ff = Instance.new("ForceField")
+            ff.Visible = false
+            ff.Parent = character
+        end
+    end
     
-    -- BYPASS 8: ForceField invisível (dupla proteção)
-    local ff = Instance.new("ForceField")
-    ff.Visible = false
-    ff.Parent = character
+    ensureForceField()
     
-    -- BYPASS 9: Monitora e recria ForceField
+    -- Monitor ForceField
     task.spawn(function()
         while godModeActive and character and character.Parent do
-            if not character:FindFirstChildOfClass("ForceField") then
-                local newFF = Instance.new("ForceField")
-                newFF.Visible = false
-                newFF.Parent = character
-            end
-            task.wait(1)
+            ensureForceField()
+            task.wait(2)
         end
     end)
     
-    -- BYPASS 10: Desabilita dano de scripts remotos
+    -- BYPASS 6: Atributos de God Mode
     for _, part in pairs(character:GetDescendants()) do
         if part:IsA("BasePart") then
             part:SetAttribute("GodMode", true)
         end
     end
     
-    -- BYPASS 11: Anti-void (detecta quedas infinitas)
+    -- BYPASS 7: Anti-void (recuperação de queda)
     task.spawn(function()
         while godModeActive and character and character.Parent do
             if hrp and hrp.Position.Y < -200 then
@@ -146,22 +120,46 @@ local function setupGodMode()
                 else
                     hrp.CFrame = hrp.CFrame + Vector3.new(0, 500, 0)
                 end
-                humanoid.Health = math.huge
+                humanoid.Health = 9e9
             end
-            task.wait(0.5)
+            task.wait(1)
         end
     end)
     
-    print("✓ 11 Bypasses de God Mode ativos!")
+    -- BYPASS 8: Stepped para física
+    table.insert(godModeConnections, RunService.Stepped:Connect(function()
+        if not godModeActive then return end
+        pcall(function()
+            if humanoid and humanoid.Parent then
+                -- Previne ragdoll
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        if part:FindFirstChild("BodyGyro") then
+                            part.BodyGyro:Destroy()
+                        end
+                    end
+                end
+            end
+        end)
+    end))
+    
+    print("✓ God Mode Delta-compatible ativo!")
+end
+
+-- Limpa conexões antigas antes de criar novas
+local function cleanupGodMode()
+    for _, conn in pairs(godModeConnections) do
+        if conn and conn.Connected then
+            conn:Disconnect()
+        end
+    end
+    godModeConnections = {}
 end
 
 -- Ativa God Mode quando spawnar
 player.CharacterAdded:Connect(function(char)
     task.wait(1)
-    for _, conn in pairs(godModeConnections) do
-        if conn then conn:Disconnect() end
-    end
-    godModeConnections = {}
+    cleanupGodMode()
     setupGodMode()
 end)
 
@@ -211,7 +209,7 @@ local function findFlyingCarpet()
     return nil
 end
 
--- Função ULTRA FORÇADA para TP com Flying Carpet (100% BYPASS)
+-- Função otimizada para TP com Flying Carpet (DELTA COMPATIBLE)
 local function useFlyingCarpetAndTP()
     if not savedPosition then
         statusText = "❌ Nenhuma base marcada!"
@@ -227,21 +225,21 @@ local function useFlyingCarpetAndTP()
     local humanoid = character:FindFirstChild("Humanoid")
     if not hrp or not humanoid then return false end
     
-    print("🔍 FORÇANDO uso do Flying Carpet...")
+    print("🔍 Procurando Flying Carpet...")
     
-    -- PROCURA AGRESSIVA DO CARPET
+    -- PROCURA CARPET
     local carpet = findFlyingCarpet()
     local attempts = 0
     
-    while not carpet and attempts < 10 do
+    while not carpet and attempts < 8 do
         print("⚠️ Carpet não encontrado, tentativa", attempts + 1)
-        task.wait(0.5)
+        task.wait(0.3)
         carpet = findFlyingCarpet()
         attempts = attempts + 1
     end
     
     if not carpet then
-        statusText = "❌ Flying Carpet não encontrado após 10 tentativas!"
+        statusText = "❌ Flying Carpet não encontrado!"
         task.wait(2)
         statusText = "Aguardando..."
         return false
@@ -249,60 +247,29 @@ local function useFlyingCarpetAndTP()
     
     print("✓ Flying Carpet encontrado:", carpet.Name)
     
-    -- DESATIVA GOD MODE TEMPORARIAMENTE (alguns jogos bloqueiam tools com ForceField)
-    godModeActive = false
-    local ff = character:FindFirstChildOfClass("ForceField")
-    if ff then ff:Destroy() end
-    
-    -- FORÇA EQUIPAR O CARPET (método agressivo)
-    for i = 1, 5 do
-        if carpet.Parent == player.Backpack then
-            humanoid:EquipTool(carpet)
-            task.wait(0.1)
-        end
-        
-        if carpet.Parent == character then
-            print("✓ Carpet equipado!")
-            break
-        end
-        task.wait(0.1)
+    -- EQUIPA CARPET
+    if carpet.Parent == player.Backpack then
+        humanoid:EquipTool(carpet)
+        task.wait(0.2)
     end
     
-    task.wait(0.2)
+    -- ATIVA CARPET (Delta-compatible method)
+    print("🔥 Ativando carpet...")
     
-    -- ATIVA O CARPET DE TODAS AS FORMAS POSSÍVEIS
-    print("🔥 FORÇANDO ativação do carpet...")
-    
-    -- Método 1: Activate() normal
-    for i = 1, 10 do
-        pcall(function()
-            if carpet:FindFirstChild("Handle") then
-                carpet:Activate()
-            end
-        end)
-        task.wait(0.03)
-    end
-    
-    -- Método 2: Simula clique do mouse (alguns tools precisam disso)
-    for i = 1, 5 do
+    for i = 1, 8 do
         pcall(function()
             carpet:Activate()
-            if carpet:FindFirstChild("Handle") then
-                local handle = carpet.Handle
-                handle:Activate()
-            end
         end)
-        task.wait(0.05)
+        task.wait(0.04)
     end
     
-    -- Método 3: FireServer em RemoteEvents (caso o carpet use)
-    for _, obj in pairs(carpet:GetDescendants()) do
-        if obj:IsA("RemoteEvent") then
+    -- Tenta ativar via Handle
+    if carpet:FindFirstChild("Handle") then
+        for i = 1, 5 do
             pcall(function()
-                obj:FireServer("Activate")
-                obj:FireServer(true)
-                obj:FireServer("Use")
+                carpet.Handle:Activate()
             end)
+            task.wait(0.05)
         end
     end
     
@@ -310,61 +277,46 @@ local function useFlyingCarpetAndTP()
     
     print("✓ Carpet ativado! Iniciando TP...")
     
-    -- REATIVA GOD MODE
-    godModeActive = true
-    setupGodMode()
-    
-    -- TELEPORTE COM 100% BYPASS
+    -- TELEPORTE DELTA-COMPATIBLE
     local targetPos = savedPosition
     
-    -- BYPASS 1: Desativa detecção de velocidade
+    -- Desativa detecção de velocidade
     hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    hrp.Anchored = true
-    task.wait(0.05)
-    hrp.Anchored = false
     
-    -- BYPASS 2: Teleporte gradual (anti-detecção)
-    local steps = 5
+    -- Teleporte gradual para evitar detecção
+    local steps = 4
     local startPos = hrp.Position
     
     for i = 1, steps do
         local alpha = i / steps
         local interpPos = startPos:Lerp(targetPos, alpha)
         
-        for j = 1, 3 do
-            hrp.CFrame = CFrame.new(interpPos)
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            task.wait(0.02)
-        end
+        hrp.CFrame = CFrame.new(interpPos)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         
         task.wait(0.05)
     end
     
-    -- BYPASS 3: Teleporte final preciso
-    for i = 1, 10 do
+    -- Teleporte final
+    for i = 1, 5 do
         hrp.CFrame = CFrame.new(targetPos)
         hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        task.wait(0.01)
+        task.wait(0.02)
     end
     
-    -- BYPASS 4: Força estado do humanoid
-    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-    task.wait(0.1)
+    -- Força estado
     humanoid:ChangeState(Enum.HumanoidStateType.Landed)
     
-    -- BYPASS 5: LOCK EXTREMO de posição (3 segundos)
-    print("🔒 LOCK ANTI-ROLLBACK EXTREMO ATIVADO!")
+    -- LOCK ANTI-ROLLBACK (otimizado para Delta)
+    print("🔒 LOCK ANTI-ROLLBACK ATIVO!")
     local lockStart = tick()
-    local lockConnections = {}
+    local lockConnection
     
-    -- Lock em 3 serviços diferentes
-    table.insert(lockConnections, RunService.Heartbeat:Connect(function()
-        if tick() - lockStart >= 3 then
-            for _, conn in pairs(lockConnections) do
-                conn:Disconnect()
+    lockConnection = RunService.Heartbeat:Connect(function()
+        if tick() - lockStart >= 2.5 then
+            if lockConnection then
+                lockConnection:Disconnect()
             end
             print("✓ Lock finalizado!")
             return
@@ -373,64 +325,43 @@ local function useFlyingCarpetAndTP()
         if hrp and hrp.Parent then
             hrp.CFrame = CFrame.new(targetPos)
             hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         end
-    end))
+    end)
     
-    table.insert(lockConnections, RunService.RenderStepped:Connect(function()
-        if tick() - lockStart >= 3 then return end
-        
-        if hrp and hrp.Parent then
-            hrp.CFrame = CFrame.new(targetPos)
-        end
-    end))
+    task.wait(2.5)
     
-    table.insert(lockConnections, RunService.Stepped:Connect(function()
-        if tick() - lockStart >= 3 then return end
-        
-        if hrp and hrp.Parent then
-            hrp.CFrame = CFrame.new(targetPos)
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        end
-    end))
-    
-    task.wait(3)
-    
-    -- BYPASS 6: Reforça posição final
-    for i = 1, 5 do
+    -- Reforça posição final
+    for i = 1, 3 do
         hrp.CFrame = CFrame.new(targetPos)
         task.wait(0.1)
     end
     
-    print("✓ TELEPORTE 100% COMPLETO!")
+    print("✓ TELEPORTE COMPLETO!")
     return true
 end
 
--- Função para criar marcador QUADRADO (não plataforma)
+-- Função para criar marcador QUADRADO
 local function createMarker(position)
     if markerPart then
         markerPart:Destroy()
     end
     
-    -- Cria um QUADRADO VERTICAL (como um cubo outline)
     markerPart = Instance.new("Part")
     markerPart.Name = "BaseMarker"
-    markerPart.Size = Vector3.new(5, 5, 5) -- CUBO 5x5x5
+    markerPart.Size = Vector3.new(5, 5, 5)
     markerPart.Position = position
     markerPart.Anchored = true
     markerPart.CanCollide = false
-    markerPart.Transparency = 1 -- Invisível, só mostra borda
+    markerPart.Transparency = 1
     markerPart.Parent = workspace
     
-    -- BORDA DO QUADRADO (SelectionBox)
     local border = Instance.new("SelectionBox")
     border.Adornee = markerPart
-    border.Color3 = Color3.fromRGB(138, 43, 226) -- Roxo neon
+    border.Color3 = Color3.fromRGB(138, 43, 226)
     border.LineThickness = 0.05
     border.Transparency = 0.2
     border.Parent = markerPart
     
-    -- Texto 3D PEQUENO
     local billboard = Instance.new("BillboardGui")
     billboard.Size = UDim2.new(0, 100, 0, 25)
     billboard.Adornee = markerPart
@@ -443,12 +374,12 @@ local function createMarker(position)
     textLabel.BackgroundTransparency = 1
     textLabel.Text = "LOCAL BASE"
     textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textLabel.TextSize = 12 -- TEXTO PEQUENO
+    textLabel.TextSize = 12
     textLabel.Font = Enum.Font.GothamBold
     textLabel.TextStrokeTransparency = 0.5
     textLabel.Parent = billboard
     
-    -- Animação de pulso na borda
+    -- Animação
     spawn(function()
         while markerPart and markerPart.Parent do
             for i = 0, 20 do
@@ -521,7 +452,7 @@ local loadingText = Instance.new("TextLabel")
 loadingText.Size = UDim2.new(1, -40, 0, 40)
 loadingText.Position = UDim2.new(0, 20, 0, 25)
 loadingText.BackgroundTransparency = 1
-loadingText.Text = "Carregando..."
+loadingText.Text = "Carregando Delta..."
 loadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
 loadingText.Font = Enum.Font.GothamBold
 loadingText.TextSize = 18
@@ -578,7 +509,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 40)
 titleLabel.Position = UDim2.new(0, 0, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "AUTO TP SYSTEM"
+titleLabel.Text = "AUTO TP [DELTA]"
 titleLabel.TextColor3 = Color3.fromRGB(138, 43, 226)
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 18
@@ -773,6 +704,6 @@ ProximityPromptService.PromptButtonHoldEnded:Connect(function(prompt)
     end
 end)
 
-print("✓ Premium Auto TP GUI v4 carregado!")
-print("✓ God Mode ATIVO (invisível)")
+print("✓ Premium Auto TP GUI v4 - DELTA COMPATIBLE")
+print("✓ God Mode ATIVO (otimizado)")
 print("✓ Detecção automática pronta!")
